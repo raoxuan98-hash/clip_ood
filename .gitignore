@@ -1,0 +1,83 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+.env
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.history/
+.trae/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Cache files
+cache/
+*.cache
+
+# Model checkpoints and large binary files
+*.pt
+*.pth
+*.pkl
+*.pickle
+*.h5
+*.ckpt
+
+# Output directories
+output/
+results/
+optimization_results/
+
+# Data directories
+scenario_datasets/
+
+# Backup files
+*.backup.*
+*.bak
+classifier_backup_*/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.gitignore~
