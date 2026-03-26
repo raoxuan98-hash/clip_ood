@@ -1,0 +1,108 @@
+{
+  "experiment": {
+    "table": "Table 3",
+    "name": "OOD Detector - lr_rgda",
+    "detector_type": "lr_rgda",
+    "timestamp": "0.34142518043518066"
+  },
+  "configuration": {
+    "id_datasets": [
+      "aircraft",
+      "caltech101",
+      "dtd"
+    ],
+    "ood_datasets": [
+      "eurosat",
+      "flowers",
+      "food101",
+      "mnist",
+      "oxford_pets",
+      "stanford_cars",
+      "sun397"
+    ],
+    "num_shots": 16,
+    "model_name": "openai/clip-vit-base-patch16"
+  },
+  "results": {
+    "ood_metrics": {
+      "auroc": 0.9073378809523809,
+      "fpr_at_95_tpr": 0.4083333333333333,
+      "detection_error": 0.1718095238095238,
+      "optimal_threshold": 0.9941568374633789
+    },
+    "id_test_info": [
+      {
+        "dataset": "aircraft",
+        "num_samples": 1000,
+        "mean_score": 0.9936206340789795,
+        "std_score": 0.0004660744743887335
+      },
+      {
+        "dataset": "caltech101",
+        "num_samples": 1000,
+        "mean_score": 0.9936016798019409,
+        "std_score": 0.0005500309634953737
+      },
+      {
+        "dataset": "dtd",
+        "num_samples": 1000,
+        "mean_score": 0.9938978552818298,
+        "std_score": 0.00042231689440086484
+      }
+    ],
+    "ood_test_info": [
+      {
+        "dataset": "eurosat",
+        "num_samples": 1000,
+        "mean_score": 0.9947749376296997,
+        "std_score": 0.0002871449978556484
+      },
+      {
+        "dataset": "flowers",
+        "num_samples": 1000,
+        "mean_score": 0.99406498670578,
+        "std_score": 0.000326814828440547
+      },
+      {
+        "dataset": "food101",
+        "num_samples": 1000,
+        "mean_score": 0.9943353533744812,
+        "std_score": 0.00034104884252883494
+      },
+      {
+        "dataset": "mnist",
+        "num_samples": 1000,
+        "mean_score": 0.9946957230567932,
+        "std_score": 5.326344398781657e-05
+      },
+      {
+        "dataset": "oxford_pets",
+        "num_samples": 1000,
+        "mean_score": 0.9942439198493958,
+        "std_score": 0.0002661026956047863
+      },
+      {
+        "dataset": "stanford_cars",
+        "num_samples": 1000,
+        "mean_score": 0.9948624968528748,
+        "std_score": 0.00025898704188875854
+      },
+      {
+        "dataset": "sun397",
+        "num_samples": 1000,
+        "mean_score": 0.9948956966400146,
+        "std_score": 0.00032443873351439834
+      }
+    ]
+  },
+  "metrics": {
+    "auroc": 0.9073378809523809,
+    "fpr_at_95_tpr": 0.4083333333333333,
+    "detection_error": 0.1718095238095238,
+    "optimal_threshold": 0.9941568374633789
+  },
+  "paths": {
+    "raw_data": "experiments/table3/combo4_lr_rgda/raw_scores.json",
+    "log": "experiments/table3/combo4_lr_rgda/eval.log"
+  }
+}

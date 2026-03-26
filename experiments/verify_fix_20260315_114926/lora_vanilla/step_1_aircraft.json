@@ -1,0 +1,8 @@
+{
+  "step": 1,
+  "task": "aircraft",
+  "accuracies": {
+    "aircraft": 0.222,
+    "caltech101": 0.938
+  }
+}

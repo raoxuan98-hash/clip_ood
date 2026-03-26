@@ -1,0 +1,7 @@
+{
+  "classifier_type": "ensemble",
+  "alpha": 0.9,
+  "id_accuracy": 0.301,
+  "ood_accuracy": 0.9782649943033854,
+  "combined_score": 0.6396324971516927
+}

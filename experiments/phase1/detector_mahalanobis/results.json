@@ -1,0 +1,14 @@
+{
+  "classifier_type": "adaptive_routing",
+  "ood_detector_type": "mahalanobis",
+  "ood_threshold": 0.993,
+  "id_accuracy": 0.029666666666666668,
+  "ood_accuracy": 1917.185302734375,
+  "ood_metrics": {
+    "auroc": 0.8730606666666666,
+    "fpr_at_95_tpr": 0.30966666666666665,
+    "detection_error": 0.1753333333333333,
+    "optimal_threshold": 1126.242431640625
+  },
+  "combined_score": 958.6074829101562
+}

@@ -1,0 +1,16 @@
+{
+  "step": 7,
+  "task": "mnist",
+  "accuracies": {
+    "aircraft": 0.223,
+    "caltech101": 0.951,
+    "dtd": 0.563,
+    "eurosat": 0.699,
+    "flowers": 0.793,
+    "food101": 0.859,
+    "mnist": 0.962,
+    "oxford_pets": 0.862,
+    "stanford_cars": 0.542,
+    "sun397": 0.632
+  }
+}

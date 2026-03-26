@@ -1,0 +1,6 @@
+{
+  "classifier_type": "zeroshot",
+  "id_accuracy": 0.3006666666666667,
+  "ood_accuracy": 0.8247439778645833,
+  "combined_score": 0.562705322265625
+}

@@ -1,0 +1,221 @@
+{
+  "args": {
+    "root": "/home/raoxuan/projects/data/X-TAIL/",
+    "task_sequence": [
+      "aircraft",
+      "caltech101",
+      "dtd",
+      "eurosat",
+      "flowers",
+      "food101",
+      "mnist",
+      "oxford_pets",
+      "stanford_cars",
+      "sun397"
+    ],
+    "num_shots": 16,
+    "full_shot": false,
+    "method": "lora_vanilla",
+    "batch_size": 32,
+    "iterations": 800,
+    "lr": 0.0001,
+    "weight_decay": 3e-05,
+    "lora_rank": 4,
+    "nsp_eps": 0.05,
+    "nsp_weight": 0.02,
+    "weight_temp": 1.0,
+    "weight_kind": "log1p",
+    "weight_p": 1.0,
+    "fd_weight": 1.0,
+    "cd_weight": 1.0,
+    "reference_dataset": "flickr8k",
+    "reference_batch_size": 32,
+    "num_workers": 4,
+    "enable_ood_eval": false,
+    "output_dir": "experiments/main_parallel_20260315_115358/lora_vanilla",
+    "seed": 42,
+    "device": "cuda",
+    "lora_type": "lora_vanilla",
+    "lora_alpha": 4
+  },
+  "metrics": {
+    "transfer": 62.264223985890645,
+    "average": 64.85600000000001,
+    "last": 69.54
+  },
+  "per_task_metrics": {
+    "aircraft": {
+      "transfer": 0.0,
+      "average": 24.220000000000002,
+      "last": 22.900000000000002
+    },
+    "caltech101": {
+      "transfer": 90.7,
+      "average": 93.14,
+      "last": 92.7
+    },
+    "dtd": {
+      "transfer": 43.05,
+      "average": 54.08,
+      "last": 52.0
+    },
+    "eurosat": {
+      "transfer": 31.16666666666666,
+      "average": 45.809999999999995,
+      "last": 49.2
+    },
+    "flowers": {
+      "transfer": 60.35,
+      "average": 71.94,
+      "last": 71.7
+    },
+    "food101": {
+      "transfer": 81.58,
+      "average": 83.61000000000001,
+      "last": 85.0
+    },
+    "mnist": {
+      "transfer": 52.98333333333333,
+      "average": 69.97,
+      "last": 93.8
+    },
+    "oxford_pets": {
+      "transfer": 85.22857142857141,
+      "average": 86.47,
+      "last": 90.8
+    },
+    "stanford_cars": {
+      "transfer": 53.574999999999996,
+      "average": 56.89999999999999,
+      "last": 68.8
+    },
+    "sun397": {
+      "transfer": 61.74444444444445,
+      "average": 62.42000000000001,
+      "last": 68.5
+    }
+  },
+  "forgetting_rate": -9.88888888888889,
+  "accuracy_matrix": [
+    [
+      0.413,
+      0.907,
+      0.435,
+      0.344,
+      0.663,
+      0.833,
+      0.562,
+      0.854,
+      0.544,
+      0.607
+    ],
+    [
+      0.208,
+      0.97,
+      0.426,
+      0.284,
+      0.621,
+      0.821,
+      0.53,
+      0.86,
+      0.495,
+      0.618
+    ],
+    [
+      0.206,
+      0.936,
+      0.688,
+      0.307,
+      0.546,
+      0.775,
+      0.482,
+      0.844,
+      0.494,
+      0.595
+    ],
+    [
+      0.272,
+      0.949,
+      0.64,
+      0.878,
+      0.584,
+      0.848,
+      0.538,
+      0.849,
+      0.559,
+      0.598
+    ],
+    [
+      0.196,
+      0.924,
+      0.579,
+      0.508,
+      0.944,
+      0.802,
+      0.55,
+      0.861,
+      0.533,
+      0.634
+    ],
+    [
+      0.226,
+      0.93,
+      0.562,
+      0.514,
+      0.859,
+      0.872,
+      0.517,
+      0.851,
+      0.54,
+      0.62
+    ],
+    [
+      0.263,
+      0.944,
+      0.555,
+      0.467,
+      0.816,
+      0.866,
+      0.979,
+      0.847,
+      0.575,
+      0.64
+    ],
+    [
+      0.191,
+      0.892,
+      0.481,
+      0.346,
+      0.726,
+      0.829,
+      0.955,
+      0.885,
+      0.546,
+      0.614
+    ],
+    [
+      0.218,
+      0.935,
+      0.522,
+      0.441,
+      0.718,
+      0.865,
+      0.946,
+      0.888,
+      0.716,
+      0.631
+    ],
+    [
+      0.229,
+      0.927,
+      0.52,
+      0.492,
+      0.717,
+      0.85,
+      0.938,
+      0.908,
+      0.688,
+      0.685
+    ]
+  ]
+}

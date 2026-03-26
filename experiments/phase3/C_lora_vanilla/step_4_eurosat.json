@@ -1,0 +1,16 @@
+{
+  "step": 4,
+  "task": "eurosat",
+  "accuracies": {
+    "aircraft": 0.142,
+    "caltech101": 0.888,
+    "dtd": 0.651,
+    "eurosat": 0.912,
+    "flowers": 0.307,
+    "food101": 0.482,
+    "mnist": 0.528,
+    "oxford_pets": 0.646,
+    "stanford_cars": 0.236,
+    "sun397": 0.339
+  }
+}

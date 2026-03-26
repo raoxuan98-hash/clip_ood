@@ -1,0 +1,61 @@
+{
+  "args": {
+    "root": "/home/raoxuan/projects/data/X-TAIL/",
+    "task_sequence": [
+      "aircraft",
+      "caltech101"
+    ],
+    "num_shots": 16,
+    "full_shot": false,
+    "method": "lora_vanilla",
+    "batch_size": 32,
+    "iterations": 100,
+    "lr": 0.0001,
+    "weight_decay": 3e-05,
+    "lora_rank": 4,
+    "nsp_eps": 0.05,
+    "nsp_weight": 0.02,
+    "weight_temp": 1.0,
+    "weight_kind": "log1p",
+    "weight_p": 1.0,
+    "fd_weight": 1.0,
+    "cd_weight": 1.0,
+    "reference_dataset": "flickr8k",
+    "reference_batch_size": 32,
+    "num_workers": 4,
+    "enable_ood_eval": false,
+    "output_dir": "experiments/test_lora_vanilla_20260315_040510",
+    "seed": 42,
+    "device": "cuda",
+    "lora_type": "lora_vanilla",
+    "lora_alpha": 4
+  },
+  "metrics": {
+    "transfer": 92.60000000000001,
+    "average": 59.45,
+    "last": 59.8
+  },
+  "per_task_metrics": {
+    "aircraft": {
+      "transfer": 0.0,
+      "average": 25.55,
+      "last": 25.5
+    },
+    "caltech101": {
+      "transfer": 92.60000000000001,
+      "average": 93.35,
+      "last": 94.1
+    }
+  },
+  "forgetting_rate": -1.4999999999999902,
+  "accuracy_matrix": [
+    [
+      0.256,
+      0.926
+    ],
+    [
+      0.255,
+      0.941
+    ]
+  ]
+}

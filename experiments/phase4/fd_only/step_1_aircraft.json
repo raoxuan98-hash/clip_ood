@@ -1,0 +1,11 @@
+{
+  "step": 1,
+  "task": "aircraft",
+  "accuracies": {
+    "aircraft": 0.383,
+    "caltech101": 0.899,
+    "dtd": 0.448,
+    "eurosat": 0.324,
+    "flowers": 0.657
+  }
+}

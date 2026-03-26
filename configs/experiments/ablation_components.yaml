@@ -1,0 +1,103 @@
+# 消融实验：LoRA-NSP各组件贡献
+# 测试NSP、FD、CD的单独和组合效果
+
+# 基线1: 纯LoRA
+experiment_lora_only:
+  name: "ablation_lora_only"
+  description: "Ablation: LoRA only (no NSP, no distillation)"
+  tags: ["ablation", "lora_only"]
+  
+  data:
+    id_datasets: ["caltech101", "flowers"]
+    ood_datasets: ["dtd", "eurosat"]
+  
+  training:
+    iterations: 800
+    lr: 1e-4
+    lora:
+      rank: 4
+      type: "lora"  # 无NSP
+    distillation:
+      enabled: false
+
+# 基线2: LoRA + NSP
+experiment_lora_nsp:
+  name: "ablation_lora_nsp"
+  description: "Ablation: LoRA + NSP (no distillation)"
+  tags: ["ablation", "lora_nsp"]
+  
+  data:
+    id_datasets: ["caltech101", "flowers"]
+    ood_datasets: ["dtd", "eurosat"]
+  
+  training:
+    iterations: 800
+    lr: 1e-4
+    lora:
+      rank: 4
+      type: "lora_nsp"
+    distillation:
+      enabled: false
+
+# 基线3: LoRA + FD
+experiment_lora_fd:
+  name: "ablation_lora_fd"
+  description: "Ablation: LoRA + Feature Distillation (no NSP, no CD)"
+  tags: ["ablation", "lora_fd"]
+  
+  data:
+    id_datasets: ["caltech101", "flowers"]
+    ood_datasets: ["dtd", "eurosat"]
+  
+  training:
+    iterations: 800
+    lr: 1e-4
+    lora:
+      rank: 4
+      type: "lora"  # 无NSP
+    distillation:
+      enabled: true
+      fd_weight: 1.0
+      cd_weight: 0.0  # 无CD
+
+# 基线4: LoRA + CD
+experiment_lora_cd:
+  name: "ablation_lora_cd"
+  description: "Ablation: LoRA + Cross-modal Distillation (no NSP, no FD)"
+  tags: ["ablation", "lora_cd"]
+  
+  data:
+    id_datasets: ["caltech101", "flowers"]
+    ood_datasets: ["dtd", "eurosat"]
+  
+  training:
+    iterations: 800
+    lr: 1e-4
+    lora:
+      rank: 4
+      type: "lora"  # 无NSP
+    distillation:
+      enabled: true
+      fd_weight: 0.0  # 无FD
+      cd_weight: 1.0
+
+# 完整方法: LoRA-NSP + FD + CD
+experiment_lora_nsp_full:
+  name: "ablation_lora_nsp_full"
+  description: "Ablation: Full LoRA-NSP (NSP + FD + CD)"
+  tags: ["ablation", "lora_nsp_full"]
+  
+  data:
+    id_datasets: ["caltech101", "flowers"]
+    ood_datasets: ["dtd", "eurosat"]
+  
+  training:
+    iterations: 800
+    lr: 1e-4
+    lora:
+      rank: 4
+      type: "lora_nsp"
+    distillation:
+      enabled: true
+      fd_weight: 1.0
+      cd_weight: 1.0

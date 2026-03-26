@@ -1,0 +1,5 @@
+detector,auroc,fpr_at_95_tpr,detection_error
+mahalanobis,N/A,N/A,N/A
+lda,N/A,N/A,N/A
+qda,N/A,N/A,N/A
+lr_rgda,N/A,N/A,N/A

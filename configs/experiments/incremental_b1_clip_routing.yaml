@@ -1,0 +1,63 @@
+# Baseline 1: Pre-trained CLIP + OOD Routing + LR-RGDA
+# 不进行微调，仅在推理时使用动态路由和LR-RGDA
+
+experiment:
+  name: "incremental_b1_clip_routing"
+  description: "Baseline 1: Pre-trained CLIP with OOD Routing and LR-RGDA"
+  tags: ["incremental", "routing", "lr_rgda", "baseline", "b1"]
+
+mode: "incremental"
+
+data:
+  task_sequence:
+    - ["aircraft"]
+    - ["caltech101"]
+    - ["dtd"]
+    - ["eurosat"]
+    - ["flowers"]
+    - ["food101"]
+    - ["mnist"]
+    - ["oxford_pets"]
+    - ["stanford_cars"]
+    - ["sun397"]
+  
+  all_datasets: ["aircraft", "caltech101", "dtd", "eurosat", "flowers", "food101", "mnist", "oxford_pets", "stanford_cars", "sun397"]
+
+# 训练配置：禁用训练，但可能需要提取统计信息
+training:
+  enabled: false
+  iterations: 0
+  lr: 0.0
+
+# 使用 LR-RGDA 分类器和 OOD 检测器
+classifier:
+  type: "lr_rgda"
+  rank: 32
+  reg_alpha1: 0.6
+  reg_alpha2: 2.0
+  reg_alpha3: 0.5
+
+ensemble:
+  enabled: true
+  alpha: 0.8
+  temperature: 1.0
+
+ood_detector:
+  enabled: true
+  type: "lr_rgda"
+  rank: 32
+  reg_alpha1: 0.6
+  reg_alpha2: 2.0
+  reg_alpha3: 0.5
+  threshold: 0.9930
+  auto_threshold: true
+  target_tpr: 0.95
+
+evaluation:
+  eval_after_each_task: true
+  eval_all_tasks: true
+  metrics: ["accuracy", "auroc", "fpr_at_95_tpr"]
+
+output:
+  save_model: false
+  save_stats: true

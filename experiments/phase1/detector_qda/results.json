@@ -1,0 +1,14 @@
+{
+  "classifier_type": "adaptive_routing",
+  "ood_detector_type": "qda",
+  "ood_threshold": 0.993,
+  "id_accuracy": 0.07666666666666666,
+  "ood_accuracy": 0.9947903752326965,
+  "ood_metrics": {
+    "auroc": 0.9914301111111111,
+    "fpr_at_95_tpr": 0.035333333333333335,
+    "detection_error": 0.03316666666666667,
+    "optimal_threshold": 0.9943418502807617
+  },
+  "combined_score": 0.5357285141944885
+}

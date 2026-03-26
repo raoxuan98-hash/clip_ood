@@ -1,0 +1,106 @@
+{
+  "args": {
+    "root": "/home/raoxuan/projects/data/X-TAIL/",
+    "task_sequence": [
+      "aircraft",
+      "caltech101",
+      "dtd",
+      "eurosat",
+      "flowers"
+    ],
+    "num_shots": 16,
+    "full_shot": false,
+    "method": "lora_vanilla",
+    "batch_size": 32,
+    "iterations": 800,
+    "lr": 0.0001,
+    "weight_decay": 3e-05,
+    "lora_rank": 4,
+    "nsp_eps": 0.05,
+    "nsp_weight": 0.02,
+    "weight_temp": 1.0,
+    "weight_kind": "log1p",
+    "weight_p": 1.0,
+    "fd_weight": 0.0,
+    "cd_weight": 1.0,
+    "reference_dataset": "flickr8k",
+    "reference_batch_size": 32,
+    "num_workers": 4,
+    "enable_ood_eval": false,
+    "output_dir": "experiments/phase4/cd_only",
+    "seed": 42,
+    "device": "cuda",
+    "lora_type": "lora_vanilla",
+    "lora_alpha": 4
+  },
+  "metrics": {
+    "transfer": 56.30416666666667,
+    "average": 61.712,
+    "last": 74.36
+  },
+  "per_task_metrics": {
+    "aircraft": {
+      "transfer": 0.0,
+      "average": 33.480000000000004,
+      "last": 33.0
+    },
+    "caltech101": {
+      "transfer": 90.5,
+      "average": 94.60000000000001,
+      "last": 95.39999999999999
+    },
+    "dtd": {
+      "transfer": 43.25,
+      "average": 59.3,
+      "last": 64.7
+    },
+    "eurosat": {
+      "transfer": 29.96666666666667,
+      "average": 53.02,
+      "last": 83.89999999999999
+    },
+    "flowers": {
+      "transfer": 61.5,
+      "average": 68.16,
+      "last": 94.8
+    }
+  },
+  "forgetting_rate": -26.924999999999997,
+  "accuracy_matrix": [
+    [
+      0.391,
+      0.905,
+      0.446,
+      0.328,
+      0.632
+    ],
+    [
+      0.324,
+      0.965,
+      0.419,
+      0.323,
+      0.622
+    ],
+    [
+      0.317,
+      0.951,
+      0.744,
+      0.248,
+      0.592
+    ],
+    [
+      0.312,
+      0.955,
+      0.709,
+      0.913,
+      0.614
+    ],
+    [
+      0.33,
+      0.954,
+      0.647,
+      0.839,
+      0.948
+    ]
+  ]
+}

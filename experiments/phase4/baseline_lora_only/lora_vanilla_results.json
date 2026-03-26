@@ -1,0 +1,106 @@
+{
+  "args": {
+    "root": "/home/raoxuan/projects/data/X-TAIL/",
+    "task_sequence": [
+      "aircraft",
+      "caltech101",
+      "dtd",
+      "eurosat",
+      "flowers"
+    ],
+    "num_shots": 16,
+    "full_shot": false,
+    "method": "lora_vanilla",
+    "batch_size": 32,
+    "iterations": 800,
+    "lr": 0.0001,
+    "weight_decay": 3e-05,
+    "lora_rank": 4,
+    "nsp_eps": 0.05,
+    "nsp_weight": 0.02,
+    "weight_temp": 1.0,
+    "weight_kind": "log1p",
+    "weight_p": 1.0,
+    "fd_weight": 0.0,
+    "cd_weight": 0.0,
+    "reference_dataset": "flickr8k",
+    "reference_batch_size": 32,
+    "num_workers": 4,
+    "enable_ood_eval": false,
+    "output_dir": "experiments/phase4/baseline_lora_only",
+    "seed": 42,
+    "device": "cuda",
+    "lora_type": "lora_vanilla",
+    "lora_alpha": 4
+  },
+  "metrics": {
+    "transfer": 50.854166666666664,
+    "average": 54.144000000000005,
+    "last": 64.38000000000001
+  },
+  "per_task_metrics": {
+    "aircraft": {
+      "transfer": 0.0,
+      "average": 24.220000000000002,
+      "last": 17.299999999999997
+    },
+    "caltech101": {
+      "transfer": 89.4,
+      "average": 90.12,
+      "last": 89.1
+    },
+    "dtd": {
+      "transfer": 39.349999999999994,
+      "average": 52.64,
+      "last": 57.599999999999994
+    },
+    "eurosat": {
+      "transfer": 25.966666666666665,
+      "average": 45.92,
+      "last": 63.6
+    },
+    "flowers": {
+      "transfer": 48.699999999999996,
+      "average": 57.82000000000001,
+      "last": 94.3
+    }
+  },
+  "forgetting_rate": -20.549999999999997,
+  "accuracy_matrix": [
+    [
+      0.391,
+      0.894,
+      0.411,
+      0.26,
+      0.656
+    ],
+    [
+      0.236,
+      0.963,
+      0.376,
+      0.256,
+      0.546
+    ],
+    [
+      0.209,
+      0.895,
+      0.69,
+      0.263,
+      0.374
+    ],
+    [
+      0.202,
+      0.863,
+      0.579,
+      0.881,
+      0.372
+    ],
+    [
+      0.173,
+      0.891,
+      0.576,
+      0.636,
+      0.943
+    ]
+  ]
+}

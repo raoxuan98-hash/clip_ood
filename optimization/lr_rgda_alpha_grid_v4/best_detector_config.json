@@ -1,0 +1,8 @@
+{
+  "detector_type": "lr_rgda",
+  "threshold": 0.9935879111289978,
+  "alpha1": 0.7,
+  "alpha2": 6.0,
+  "alpha3": 0.5,
+  "rank": 32
+}
