@@ -1,4 +1,5 @@
 # Python
+figures/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -62,8 +63,15 @@ output/
 results/
 optimization_results/
 
+demo_ood.ipynb
+
+PRESENTATION.md
+
+
 # Data directories
 scenario_datasets/
+experiments/
+optimization/
 
 # Backup files
 *.backup.*
