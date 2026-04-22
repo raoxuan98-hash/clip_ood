@@ -1,4 +1,5 @@
 import os
+os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
 import torch
 import random
 import argparse
@@ -18,7 +19,7 @@ def parse_args():
     # 数据集相关参数
     parser.add_argument("--id_datasets", type=list, default=["caltech101", "flowers", "oxford_pets", "stanford_cars", "food101"], help="List of ID datasets for training.")
     parser.add_argument("--ood_datasets", type=list, default=["dtd", "eurosat", "mnist", "sun397"], help="List of OOD datasets for evaluation.")
-    parser.add_argument("--root", type=str, default="/home/raoxuan/projects/data/X-TAIL/", help="Root directory of the dataset.")
+    parser.add_argument("--root", type=str, default="/data1/open_datasets/X-TAIL", help="Root directory of the dataset.")
     parser.add_argument("--num_shots", type=int, default=16, help="Number of shots for few-shot learning.")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for training and testing.")
     parser.add_argument("--max_num_per_test_dataset", type=int, default=1000, help="Maximum number of samples per test dataset.")
@@ -179,46 +180,35 @@ def main(args):
             temperature=1.0
         )
         
-        # 构建零样本分类器
-        print("\n=== Building Zero-shot Classifier ===")
-        zeroshot_classifier = get_zeroshot_classifier(model, processor, all_class_names, args.device)
+        # ------------------- 终极整合修改开始 (修复 OOD 盲区 & 对齐接口) -------------------
+        print("\n=== Preparing Global Class Names ===")
+        # 1. 获取 OOD 类别名称 (补全 CLIP 的知识库)
+        ood_class_names =[]
+        for d_name in args.ood_datasets:
+            _, test_transform = get_transforms(d_name)
+            _, _, _, c_names = get_xtail_trainloader(
+                root=args.root, dataset_name=d_name, 
+                transform_train=None, transform_test=test_transform,
+                num_shots=1, batch_size=1
+            )
+            ood_class_names.extend(c_names)
         
-        # 构建集成分类器
+        num_id_classes = len(all_class_names) # 记录 ID 类别的数量 (极其重要的红线！)
+        global_class_names = all_class_names + ood_class_names # ID + OOD 全局名单
+
+        # 2. 构建零样本分类器 (使用全球名单)
+        print("\n=== Building Zero-shot Classifier ===")
+        zeroshot_classifier = get_zeroshot_classifier(model, processor, global_class_names, args.device)
+        
+        # 3. 构建集成分类器 (完美对接你重构的接口)
         print("\n=== Building Ensemble Classifier ===")
         ensemble_classifier = EnsembleClassifier(
-            zeroshot_classifier, 
-            lr_rgda_classifier, 
+            zeroshot_classifier=zeroshot_classifier, 
+            lr_rgda_classifier=lr_rgda_classifier, 
             alpha=args.alpha, 
-            temperature=args.temperature
+            num_id_classes=num_id_classes  # <--- 传入红线参数，删掉 temperature！
         )
-        
-        # 构建OOD检测器
-        print("\n=== Building OOD Detector ===")
-        if args.ood_detector_type == "mahalanobis":
-            ood_detector = MahalanobisOODDetector.from_stats_dict(
-                stats_dict=stats_dict,
-                alpha=args.mahalanobis_alpha,
-                device=args.device
-            )
-        else:
-            ood_detector = ClassifierBasedOODDetector(
-                stats_dict=stats_dict,
-                classifier_type=args.ood_detector_type,
-                device=args.device,
-                rank=32,
-                qda_reg_alpha1=0.6,
-                qda_reg_alpha2=1.0,
-                qda_reg_alpha3=0.5
-            )
-        
-        # 构建自适应路由分类器
-        print("\n=== Building Adaptive Router ===")
-        router = AdaptiveRouter(
-            zeroshot_classifier, 
-            ensemble_classifier, 
-            ood_detector, 
-            threshold=args.ood_threshold
-        )
+        # ------------------- 终极整合修改结束 -------------------
         
         # 评估
         print("\n=== Evaluating ===")
@@ -348,16 +338,21 @@ def main(args):
             )
             
             # 构建零样本分类器
+            # history_class_names 是以前学过的，task_class_names 是这次新学的
             all_class_names = history_class_names + [task_class_names]
-            flat_class_names = [name for sublist in all_class_names for name in sublist]
+            flat_class_names =[name for sublist in all_class_names for name in sublist]
+            
+            # 【新增：记录当前所有认识的 ID 类别总数】
+            current_num_id_classes = len(flat_class_names)
+            
             zeroshot_classifier = get_zeroshot_classifier(model, processor, flat_class_names, args.device)
             
-            # 构建集成分类器
+            # 构建集成分类器 (对齐新接口)
             ensemble_classifier = EnsembleClassifier(
-                zeroshot_classifier, 
-                lr_rgda_classifier, 
+                zeroshot_classifier=zeroshot_classifier, 
+                lr_rgda_classifier=lr_rgda_classifier, 
                 alpha=args.alpha, 
-                temperature=args.temperature
+                num_id_classes=current_num_id_classes  
             )
             
             # 构建OOD检测器

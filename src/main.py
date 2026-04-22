@@ -1,4 +1,5 @@
 import os
+os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
 import torch
 import random
 import argparse
@@ -16,7 +17,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="CLIP Zero-shot Classification Continual Learning")
     
     # 数据集相关参数
-    parser.add_argument("--id_datasets", type=list, default=["caltech101", "flowers", "oxford_pets", "stanford_cars", "food101"], help="List of ID datasets for training.")
+    parser.add_argument("--id_datasets", type=list, default=["aircraft", "caltech101", "dtd", "eurosat", "flowers", "food101", "mnist", "oxford_pets", "stanford_cars", "sun397"], help="List of 10 ID datasets.")
     parser.add_argument("--ood_datasets", type=list, default=["dtd", "eurosat", "mnist", "sun397"], help="List of OOD datasets for evaluation.")
     parser.add_argument("--root", type=str, default="/home/raoxuan/projects/data/X-TAIL/", help="Root directory of the dataset.")
     parser.add_argument("--num_shots", type=int, default=16, help="Number of shots for few-shot learning.")
@@ -60,7 +61,7 @@ def parse_args():
     
     # 增量学习模式
     parser.add_argument("--incremental_mode", type=bool, default=False, help="Whether to use incremental learning mode.")
-    parser.add_argument("--dataset_sequence", type=list, default=[["caltech101"], ["flowers"], ["oxford_pets"], ["stanford_cars"], ["food101"]], help="Sequence of datasets for incremental learning.")
+    parser.add_argument("--dataset_sequence", type=list, default=[["aircraft"], ["caltech101"], ["dtd"], ["eurosat"], ["flowers"], ["food101"], ["mnist"], ["oxford_pets"], ["stanford_cars"], ["sun397"]], help="Sequence of 10 tasks.")
 
     args = parser.parse_args()
     return args
@@ -172,18 +173,33 @@ def main(args):
             temperature=1.0
         )
         
-        # 构建零样本分类器
-        print("\n=== Building Zero-shot Classifier ===")
-        zeroshot_classifier = get_zeroshot_classifier(model, processor, all_class_names, args.device)
+        print("\n=== Preparing Global Class Names ===")
+        # 1. 获取 OOD 类别名称 (补全 CLIP 的知识库)
+        ood_class_names =[]
+        for d_name in args.ood_datasets:
+            _, test_transform = get_transforms(d_name)
+            _, _, _, c_names = get_xtail_trainloader(
+                root=args.root, dataset_name=d_name, 
+                transform_train=None, transform_test=test_transform,
+                num_shots=1, batch_size=1
+            )
+            ood_class_names.extend(c_names)
         
-        # 构建集成分类器
+        num_id_classes = len(all_class_names) # 记录 ID 类别的数量 
+        global_class_names = all_class_names + ood_class_names # ID + OOD 全局名单
+
+        # 2. 构建零样本分类器 (使用全局名单)
+        print("\n=== Building Zero-shot Classifier ===")
+        zeroshot_classifier = get_zeroshot_classifier(model, processor, global_class_names, args.device)
+        
+        # 3. 构建集成分类器 (对接重构接口)
         print("\n=== Building Ensemble Classifier ===")
         ensemble_classifier = EnsembleClassifier(
-            zeroshot_classifier, 
-            lr_rgda_classifier, 
+            zeroshot_classifier=zeroshot_classifier, 
+            lr_rgda_classifier=lr_rgda_classifier, 
             alpha=args.alpha, 
-            temperature=args.temperature
-        )
+            num_id_classes=num_id_classes  
+        )   
         
         # 构建OOD检测器
         print("\n=== Building OOD Detector ===")
@@ -267,19 +283,21 @@ def main(args):
         # 第二种学习模式：增量学习
         print("\n=== Starting Incremental Learning ===")
         
-        # 初始化历史记录
-        history_classifiers = []
-        history_ood_detectors = []
-        history_class_names = []
+        history_classifiers =[]
+        history_class_names =[]
+        
+        # 建立全局统计字典和全局成绩单
+        global_stats_dict = {} 
+        acc_matrix_zs =[]
+        acc_matrix_rgda = []
+        acc_matrix_ens =[]
         
         for i, task_datasets in enumerate(args.dataset_sequence):
             print(f"\n=== Task {i+1}: {task_datasets} ===")
             
-            # 准备训练数据
+            # --- 1. 准备训练数据与训练 (保持不变) ---
             train_loaders = []
-            task_class_names = []
-            label_offset = sum(len(c_names) for c_names in history_class_names)
-            
+            task_class_names =[]
             for d_name in task_datasets:
                 train_transform, test_transform = get_transforms(d_name)
                 tr_loader, _, _, c_names = get_xtail_trainloader(
@@ -290,17 +308,16 @@ def main(args):
                 train_loaders.append(tr_loader)
                 task_class_names.extend(c_names)
             
-            # 合并训练数据
             from torch.utils.data import ConcatDataset, DataLoader
             merged_dataset = ConcatDataset([loader.dataset for loader in train_loaders])
             merged_loader = DataLoader(merged_dataset, batch_size=args.batch_size, shuffle=True)
             
-            # 训练模型
+            # 训练模型 (LoRA-NSP)
             model = trainer.train(merged_loader, task_class_names, reference_loader)
             
-            # 提取特征
+            # --- 2. 提取特征并构建统计字典 ---
             task_features = []
-            task_labels = []
+            task_labels =[]
             label_offset = sum(len(c_names) for c_names in history_class_names)
             
             for d_name in task_datasets:
@@ -310,7 +327,6 @@ def main(args):
                     transform_train=train_transform, transform_test=test_transform,
                     num_shots=args.num_shots, batch_size=args.batch_size
                 )
-                
                 features, labels = extract_features(model, tr_loader, args.device)
                 task_features.append(features)
                 task_labels.append(labels + label_offset)
@@ -318,13 +334,15 @@ def main(args):
             task_features = torch.cat(task_features)
             task_labels = torch.cat(task_labels)
             
-            # 构建类别统计分布字典
             from src.detectors.ood_detector import build_stats_dict_from_features
             task_stats_dict = build_stats_dict_from_features(task_features, task_labels)
             
-            # 构建LR-RGDA分类器
+            # 累加统计字典，防止统计分类器失忆
+            global_stats_dict.update(task_stats_dict)
+            
+            # --- 3. 构建所有的分类器 ---
             lr_rgda_classifier = LRRGDAClassifier(
-                stats_dict=task_stats_dict,
+                stats_dict=global_stats_dict, # 使用包含所有历史记忆的全局字典
                 device=args.device,
                 rank=32,
                 qda_reg_alpha1=0.6,
@@ -333,44 +351,82 @@ def main(args):
                 temperature=1.0
             )
             
-            # 构建零样本分类器
             all_class_names = history_class_names + [task_class_names]
             flat_class_names = [name for sublist in all_class_names for name in sublist]
             zeroshot_classifier = get_zeroshot_classifier(model, processor, flat_class_names, args.device)
             
-            # 构建集成分类器
+            current_num_classes = len(flat_class_names)
             ensemble_classifier = EnsembleClassifier(
                 zeroshot_classifier, 
                 lr_rgda_classifier, 
                 alpha=args.alpha, 
-                temperature=args.temperature
+                num_id_classes=current_num_classes
             )
             
-            # 构建OOD检测器
-            ood_detector = ClassifierBasedOODDetector(
-                stats_dict=task_stats_dict,
-                classifier_type=args.ood_detector_type,
-                device=args.device,
-                rank=32,
-                qda_reg_alpha1=0.6,
-                qda_reg_alpha2=1.0,
-                qda_reg_alpha3=0.5
-            )
-            
-            # 保存到历史记录
-            history_classifiers.append(ensemble_classifier)
-            history_ood_detectors.append(ood_detector)
             history_class_names.append(task_class_names)
             
-            # 评估
+            # --- 4. ：自动评估并记录成绩 ---
             print("\n=== Evaluating Task ===")
-            # 这里可以添加评估代码
+            step_accs_zs, step_accs_rgda, step_accs_ens = [], [],[]
+            
+            # 遍历所有已经学过的任务进行考试
+            for j in range(i + 1):
+                eval_datasets = args.dataset_sequence[j]
+                test_features_list = []
+                test_labels_list =[]
+                eval_label_offset = sum(len(c) for c in history_class_names[:j])
+                
+                for d_name in eval_datasets:
+                    _, test_transform = get_transforms(d_name)
+                    _, te_loader, _, c_names = get_xtail_trainloader(
+                        root=args.root, dataset_name=d_name, 
+                        transform_train=None, transform_test=test_transform,
+                        num_shots=args.num_shots, batch_size=args.batch_size
+                    )
+                    features, labels = extract_features(model, te_loader, args.device)
+                    test_features_list.append(features)
+                    test_labels_list.append(labels + eval_label_offset)
+                    eval_label_offset += len(c_names)
+                
+                test_features = torch.cat(test_features_list).to(args.device)
+                test_labels = torch.cat(test_labels_list).to(args.device)
+                
+                with torch.no_grad():
+                    # 算出 3 种分类器的成绩
+                    zs_logits = (test_features @ zeroshot_classifier) * model.logit_scale.exp().item()
+                    zs_acc = zs_logits.argmax(dim=1).eq(test_labels).float().mean().item() * 100
+                    rgda_acc = lr_rgda_classifier.predict(test_features).eq(test_labels).float().mean().item() * 100
+                    ens_acc = ensemble_classifier.predict(test_features, model.logit_scale.exp().item()).eq(test_labels).float().mean().item() * 100
+                
+                print(f"  [Tested on Task {j+1}: {eval_datasets[0]}] -> Zero-shot: {zs_acc:.1f}% | LR-RGDA: {rgda_acc:.1f}% | Ensemble: {ens_acc:.1f}%")
+                step_accs_zs.append(zs_acc)
+                step_accs_rgda.append(rgda_acc)
+                step_accs_ens.append(ens_acc)
+                
+            acc_matrix_zs.append(step_accs_zs)
+            acc_matrix_rgda.append(step_accs_rgda)
+            acc_matrix_ens.append(step_accs_ens)
 
-    print("\n=== Training and Evaluation Completed ===")
+        print("\n=== Training and Evaluation Completed ===")
+        
+        print("\n" + "="*80)
+        print("="*80)
+        
+        def print_paper_metrics(matrix, name):
+            num_tasks = len(matrix)
+            transfers = [matrix[k][k] for k in range(num_tasks)]
+            lasts = matrix[-1]
+            averages = [sum(matrix[i][j] for i in range(j, num_tasks)) / (num_tasks - j) for j in range(num_tasks)]
+            
+            print(f"\n[{name} 分类器指标]")
+            print(f"Transfer : {[f'{x:.1f}' for x in transfers]} | 平均: {sum(transfers)/num_tasks:.1f}")
+            print(f"Average  : {[f'{x:.1f}' for x in averages]} | 平均: {sum(averages)/num_tasks:.1f}")
+            print(f"Last     : {[f'{x:.1f}' for x in lasts]} | 平均: {sum(lasts)/num_tasks:.1f}")
+
+        print_paper_metrics(acc_matrix_zs, "Zero-shot")
+        print_paper_metrics(acc_matrix_rgda, "LR-RGDA Only ")
+        print_paper_metrics(acc_matrix_ens, f"Ensemble Ours ")
 
 if __name__ == "__main__":
-    # 解析命令行参数
     command_line_args = parse_args()
-    
-    # 开始训练和评估
     main(command_line_args)

@@ -8,8 +8,8 @@ import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def get_clip_model(args, train_mode="lora"):
-    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16")
-    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16", use_fast=False)
+    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16", use_safetensors=True)
+    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
 
     if train_mode == "frozen":
         for p in model.parameters():
