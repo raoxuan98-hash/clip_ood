@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Iterable, Optional
+import logging
 
 def compute_weights(x: torch.Tensor, weight_kind="log1p", beta=1.0, weight_p=1.0, weight_alpha=0.5, weight_kappa=2.0) -> torch.Tensor:
     if weight_kind == "exp":
@@ -269,13 +270,40 @@ def build_projection(
     weight_p: float = 2.0,
     weight_kappa: float = 2 ) -> torch.Tensor:
 
-    eps = 1e-6
-    cov = cov + eps * torch.eye(cov.size(0), device=cov.device, dtype=cov.dtype)
-    eigvals, eigvecs = torch.linalg.eigh(cov)          # ascending order
+# --- [修改点] 提升计算精度和稳定性 ---
+    # 1. 强制转换为 float64 (双精度)，这是解决 MKL Argument 8 错误的核心
+    cov_double = cov.to(torch.float64)
+    
+    # 2. 检查并清理 NaN 或 Inf，防止脏数据导致崩溃
+    if torch.isnan(cov_double).any() or torch.isinf(cov_double).any():
+        cov_double = torch.nan_to_num(cov_double, nan=0.0, posinf=1.0, neginf=-1.0)
+    
+    # 3. 确保矩阵绝对对称（理论上 cov 是对称的，但浮点误差会导致微小不对称，引发 eigh 报错）
+    cov_double = (cov_double + cov_double.t()) / 2.0
+    
+    # 4. 增加正则化项 (岭系数)，将 1e-6 提高到 1e-4 以增强稳定性
+    safe_eps = 1e-4
+    cov_double = cov_double + safe_eps * torch.eye(cov_double.size(0), device=cov_double.device, dtype=torch.float64)
+    
+    try:
+        # 5. 在双精度下进行特征值分解
+        eigvals_double, eigvecs_double = torch.linalg.eigh(cov_double)
+    except RuntimeError:
+        # [备选方案] 如果 GPU 分解失败，尝试在 CPU 上分解（CPU 的 MKL 库通常比 GPU 更鲁棒）
+        logging.warning("GPU eigh failed, falling back to CPU...")
+        eigvals_double, eigvecs_double = torch.linalg.eigh(cov_double.cpu())
+        eigvals_double = eigvals_double.to(cov.device)
+        eigvecs_double = eigvecs_double.to(cov.device)
+    
+    # 6. 计算完成后，转回模型原本的精度（float16 或 float32）
+    # [修改点] 将结果从双精度转回原精度，并移回 GPU (cuda)
+    eigvals = eigvals_double.to(dtype=cov.dtype, device='cuda')
+    eigvecs = eigvecs_double.to(dtype=cov.dtype, device='cuda')
+    # --- [修改结束] ---
     eigvals = torch.abs(eigvals)
     d = cov.size(0)
     sum_vals = eigvals.sum()
-    scale_ = d / (sum_vals + eps)
+    scale_ = d / (sum_vals + safe_eps)
     eigvals = eigvals * scale_
 
 
@@ -296,4 +324,7 @@ def build_projection(
         P = V_keep @ V_keep.t()
         I = torch.eye(P.size(0), device=P.device, dtype=P.dtype)
         P = (1 - nsp_weight) * P + nsp_weight * I
+    
+    # [修改点] 确保返回的 P 矩阵一定在显卡上，与模型权重设备对齐
+    P = P.to(device='cuda')
     return P
