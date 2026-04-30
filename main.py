@@ -4,6 +4,9 @@ import torch
 import random
 import argparse
 import numpy as np
+import json
+import logging
+from datetime import datetime
 
 # [修改点] 移除了 ClassifierBasedOODDetector 和 AdaptiveRouter 的导入，仅保留集成分类器
 from src.trainers.lora_nsp_trainer import LoRANSPTrainer
@@ -90,7 +93,7 @@ def get_zeroshot_classifier(model, processor, class_names, device):
 
 
 def evaluate_dataset(args, d_name, model, zeroshot_classifier, lr_rgda_classifier, current_num_classes, eval_label_offset):
-    """ [新增修改点] 为了代码复用，将 debug 中的拼接评估逻辑抽象为一个函数 """
+    """ [修改点] 为了代码复用，将 debug 中的拼接评估逻辑抽象为一个函数 """
     _, test_transform = get_transforms(d_name)
     _, te_loader, _, c_names = get_xtail_trainloader(
         root=args.root, dataset_name=d_name, 
@@ -130,10 +133,55 @@ def evaluate_dataset(args, d_name, model, zeroshot_classifier, lr_rgda_classifie
     return zs_acc, rgda_acc, ens_acc, len(c_names)
 
 
+
+
 def main(args):
     """主程序"""
     if args.seed is not None:
         fix_random_seed(args.seed)
+
+    # [修改点] 将工具函数定义挪到 main 函数最前方，确保模式一和模式二都能调用，防止报错
+    # [修改点] 适配全量和增量两种矩阵形状
+    def get_full_stats(matrix):
+        num_rows = len(matrix)
+        # 如果只有一行（联合微调），Transfer/Average/Last 就是这一行本身
+        if num_rows == 1:
+            data_row = matrix[0]
+            return {
+                "raw_matrix": matrix,
+                "transfer": data_row,
+                "transfer_total_avg": sum(data_row) / len(data_row),
+                "average_per_task": data_row,
+                "average_total_avg": sum(data_row) / len(data_row),
+                "last": data_row,
+                "last_total_avg": sum(data_row) / len(data_row)
+            }
+        else:
+            # 增量学习逻辑 (多行矩阵)
+            trans = [matrix[k][k] for k in range(num_rows)]
+            lasts = matrix[-1]
+            avgs = [sum(matrix[i][j] for i in range(j, num_rows)) / (num_rows - j) for j in range(num_rows)]
+            return {
+                "raw_matrix": matrix, "transfer": trans, "transfer_total_avg": sum(trans) / num_rows,
+                "average_per_task": avgs, "average_total_avg": sum(avgs) / num_rows,
+                "last": lasts, "last_total_avg": sum(lasts) / num_rows
+            }
+
+    def print_paper_metrics(matrix, name, headers):
+        stats = get_full_stats(matrix)
+        num_cols = len(matrix[0])
+        
+        print(f"\n" + "-"*110)
+        print(f"[{name} 指标报告]")
+        # 自动截取对应的表头
+        header_str = " | ".join([f"{h[:8]:<8}" for h in headers[:num_cols]])
+        print(f"指标类型   | " + header_str + " | [平均总分]")
+        print("-" * 110)
+        
+        print(f"Transfer  | " + " | ".join([f"{x:8.1f}" for x in stats['transfer']]) + f" | [{stats['transfer_total_avg']:.1f}]")
+        print(f"Average   | " + " | ".join([f"{x:8.1f}" for x in stats['average_per_task']])  + f" | [{stats['average_total_avg']:.1f}]")
+        print(f"Last      | " + " | ".join([f"{x:8.1f}" for x in stats['last']])     + f" | [{stats['last_total_avg']:.1f}]")
+        print("-" * 110)
 
     trainer = LoRANSPTrainer(args)
     model = trainer.model
@@ -145,12 +193,24 @@ def main(args):
         # =======================================================
         # 模式一：联合微调 (Joint Fine-tuning) 
         # =======================================================
-        print("\n=== Starting Joint Fine-tuning ===")
+        logging.info("\n=== Starting Joint Fine-tuning (Fixed Labels) ===")
         
-        train_loaders = []
-        all_class_names =[]
+        # [修改点] 在 if 块内部定义局部类，解决 ConcatDataset 导致的标签冲突问题
+        class LocalShiftDataset(torch.utils.data.Dataset):
+            def __init__(self, base_dataset, shift):
+                self.base = base_dataset
+                self.shift = shift
+            def __getitem__(self, idx):
+                img, label = self.base[idx]
+                return img, label + self.shift
+            def __len__(self):
+                return len(self.base)
+
+        all_shifted_datasets = []
+        all_class_names = []
+        current_offset = 0 # 记录标签平移量
         
-        # 合并所有训练数据
+        # 1. 准备所有数据集的训练数据
         for d_name in args.id_datasets:
             train_transform, test_transform = get_transforms(d_name)
             tr_loader, _, _, c_names = get_xtail_trainloader(
@@ -158,99 +218,104 @@ def main(args):
                 transform_train=train_transform, transform_test=test_transform,
                 num_shots=args.num_shots, batch_size=args.batch_size
             )
-            train_loaders.append(tr_loader)
+            # [修改点] 手动应用标签偏移，确保不同数据集的标签互不冲突
+            shifted_ds = LocalShiftDataset(tr_loader.dataset, current_offset)
+            all_shifted_datasets.append(shifted_ds)
             all_class_names.extend(c_names)
+            current_offset += len(c_names) # 更新偏移量
         
-        from torch.utils.data import ConcatDataset, DataLoader
-        merged_dataset = ConcatDataset([loader.dataset for loader in train_loaders])
+        from torch.utils.data import DataLoader, ConcatDataset
+        merged_dataset = ConcatDataset(all_shifted_datasets)
         merged_loader = DataLoader(merged_dataset, batch_size=args.batch_size, shuffle=True)
         
-        # 训练模型
+        # 2. 训练模型 (联合训练 800 iterations)
         model = trainer.train(merged_loader, all_class_names, reference_loader)
         
-        # 提取特征用于训练分类器
-        print("\n=== Extracting Features ===")
-        all_features =[]
-        all_labels =[]
-        label_offset = 0
+        # [修改点] 训练结束后合并权重
+        logging.info("\n=== Merging LoRA Weights for Joint Evaluation ===")
+        trainer.finalize_task_for_incremental()
         
-        for i, d_name in enumerate(args.id_datasets):
-            train_transform, test_transform = get_transforms(d_name)
+        # 3. 提取特征用于构建 LR-RGDA 分类器
+        logging.info("\n=== Extracting Features for Global LR-RGDA ===")
+        all_features = []
+        all_labels = []
+        feat_label_offset = 0 # 提取特征时的标签偏移
+        
+        for d_name in args.id_datasets:
+            train_transform, _ = get_transforms(d_name)
             tr_loader, _, _, c_names = get_xtail_trainloader(
                 root=args.root, dataset_name=d_name, 
-                transform_train=train_transform, transform_test=test_transform,
+                transform_train=train_transform, transform_test=None,
                 num_shots=args.num_shots, batch_size=args.batch_size
             )
-            
             features, labels = extract_features(model, tr_loader, args.device)
-            # [修改点] 提取 LR-RGDA 统计量之前必须经过 L2 归一化
+            # [修改点] 严格 L2 归一化
             features = features / features.norm(dim=-1, keepdim=True)
             all_features.append(features)
-            all_labels.append(labels + label_offset)
-            label_offset += len(c_names)
+            all_labels.append(labels + feat_label_offset)
+            feat_label_offset += len(c_names)
         
         all_features = torch.cat(all_features)
         all_labels = torch.cat(all_labels)
         
-        # 构建类别统计分布字典
-        print("\n=== Building Stats Dict ===")
         from src.detectors.ood_detector import build_stats_dict_from_features
         stats_dict = build_stats_dict_from_features(all_features, all_labels)
         
-        # 构建LR-RGDA分类器
-        print("\n=== Building LR-RGDA Classifier ===")
+        # 4. 构建分类器
         lr_rgda_classifier = LRRGDAClassifier(
-            stats_dict=stats_dict,
-            device=args.device,
-            rank=32,
-            qda_reg_alpha1=0.6,
-            qda_reg_alpha2=1.0,
-            qda_reg_alpha3=0.5,
-            temperature=1.0
+            stats_dict=stats_dict, device=args.device, rank=32,
+            qda_reg_alpha1=0.6, qda_reg_alpha2=1.0, qda_reg_alpha3=0.5, temperature=1.0
         )
         
-        print("\n=== Preparing Global Class Names ===")
-        # 获取 OOD 类别名称 (补全 CLIP 的知识库)
-        ood_class_names =[]
-        for d_name in args.ood_datasets:
-            _, test_transform = get_transforms(d_name)
-            #[修改点] 将 num_shots=1 和 batch_size=1 改为 args.num_shots 和 args.batch_size
-            _, _, _, c_names = get_xtail_trainloader(
-                root=args.root, dataset_name=d_name, 
-                transform_train=None, transform_test=test_transform,
-                num_shots=args.num_shots, batch_size=args.batch_size
-            )
-            ood_class_names.extend(c_names)
+        num_id_classes = len(all_class_names)
+        zeroshot_classifier = get_zeroshot_classifier(model, processor, all_class_names, args.device)
         
-        num_id_classes = len(all_class_names) # 记录 ID 类别的数量 
-        global_class_names = all_class_names + ood_class_names # ID + OOD 全局名单
-
-        print("\n=== Building Zero-shot Classifier ===")
-        zeroshot_classifier = get_zeroshot_classifier(model, processor, global_class_names, args.device)
-        
-        #[修改点] 删除了 OOD 检测器和 Router 的实例化部分，直接进行评估
-        print("\n=== Evaluating (Joint Fine-tuning) ===")
+        # 5. 评估所有数据集并记录矩阵格式
+        logging.info("\n=== Evaluating Joint Fine-tuning Performance ===")
+        final_accs_zs = []
+        final_accs_rgda = []
+        final_accs_ens = []
         
         eval_offset = 0
-        print("\n[ID Datasets Evaluation]")
         for d_name in args.id_datasets:
             zs_acc, rgda_acc, ens_acc, c_len = evaluate_dataset(
                 args, d_name, model, zeroshot_classifier, lr_rgda_classifier, num_id_classes, eval_offset
             )
+            final_accs_zs.append(zs_acc)
+            final_accs_rgda.append(rgda_acc)
+            final_accs_ens.append(ens_acc)
             eval_offset += c_len
-            print(f"{d_name:<15s} -> ZS: {zs_acc:5.1f}% | RGDA: {rgda_acc:5.1f}% | Ens: {ens_acc:5.1f}%")
+            logging.info(f"Dataset: {d_name:<12s} | ZS: {zs_acc:5.1f}% | RGDA: {rgda_acc:5.1f}% | Ensemble: {ens_acc:5.1f}%")
 
-        print("\n[OOD Datasets Evaluation]")
-        for d_name in args.ood_datasets:
-            zs_acc, rgda_acc, ens_acc, c_len = evaluate_dataset(
-                args, d_name, model, zeroshot_classifier, lr_rgda_classifier, num_id_classes, eval_offset
-            )
-            eval_offset += c_len
-            # OOD 数据集中 RGDA 准确率通常很低或为0，主要是看 ZS 和 Ens 的表现
-            print(f"{d_name:<15s} -> ZS: {zs_acc:5.1f}% | RGDA: {rgda_acc:5.1f}% | Ens: {ens_acc:5.1f}%")
-        
-        # [修改点] 删除了计算 AUROC, FPR@95TPR 等 OOD 指标的代码
-        print("\n=== Joint Fine-tuning Evaluation Completed ===")
+        # 6. 调用刚才写好的美化打印和保存逻辑
+        task_names = args.id_datasets
+        acc_matrix_zs = [final_accs_zs]
+        acc_matrix_rgda = [final_accs_rgda]
+        acc_matrix_ens = [final_accs_ens]
+
+        print_paper_metrics(acc_matrix_zs, "Joint Zero-shot", task_names)
+        print_paper_metrics(acc_matrix_rgda, "Joint LR-RGDA", task_names)
+        print_paper_metrics(acc_matrix_ens, "Joint Ours Ensemble", task_names)
+
+
+
+        # 7. 自动保存 JSON
+        save_results = {
+            "mode": "Joint Fine-tuning",
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "arguments": vars(args),
+            "dataset_order": task_names,
+            "metrics": {
+                "zero_shot": get_full_stats(acc_matrix_zs),
+                "lr_rgda": get_full_stats(acc_matrix_rgda),
+                "ours_ensemble": get_full_stats(acc_matrix_ens)
+            }
+        }
+        os.makedirs("experiments", exist_ok=True)
+        save_path = f"experiments/joint_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        with open(save_path, 'w') as f:
+            json.dump(save_results, f, indent=4)
+        logging.info(f"\n 联合微调结果已保存至: {save_path}")
 
     else:
         # =======================================================
@@ -377,12 +442,11 @@ def main(args):
         print("Final Results Mapping to Paper Tables")
         print("="*80)
         
-        # =======================================================
-        # [修改点] 1. 提取数据集名称作为表头
-        # =======================================================
+
+        # [修改点]  提取数据集名称作为表头
         task_names = [d[0] for d in args.dataset_sequence]
 
-        # [修改点] 2. 增强版的打印函数：带表头，更美观
+        # [修改点]  增强版的打印函数：带表头，更美观
         def print_paper_metrics(matrix, name, headers):
             num_tasks = len(matrix)
             transfers = [matrix[k][k] for k in range(num_tasks)]
@@ -405,11 +469,9 @@ def main(args):
         print_paper_metrics(acc_matrix_rgda, "LR-RGDA Only", task_names)
         print_paper_metrics(acc_matrix_ens, f"Ours Ensemble (alpha={args.alpha})", task_names)
 
-        # =======================================================
+
         # [修改点] 3. 增强版的 JSON 保存逻辑：包含表头和所有平均值
-        # =======================================================
-        import json
-        from datetime import datetime
+
 
         def get_full_stats(matrix):
             num_tasks = len(matrix)

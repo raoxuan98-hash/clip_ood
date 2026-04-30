@@ -28,6 +28,7 @@ class FeatureExtractorHook:
             self.features.append(x.detach().cpu())
     
     def clear(self):
+        # [修改点] 显式清空列表，用于增量计算时及时释放内存
         self.features =[]
     
     def get_features(self):
@@ -93,66 +94,86 @@ class LoRANSPTrainer:
             covariances: {layer_name: cov_matrix}
                 cov_matrix = X^T X / N, shape [D, D]
         """
-        logging.info("=== Extracting Layer Covariances ===")
+        # [修改点] 采用增量计算模式（Incremental Mode），解决大型数据集（如Sun397）导致的内存溢出卡死问题
+        logging.info("=== Extracting Layer Covariances (Memory-Safe Mode) ===")
+        
         # [修改点] 手动清理显存碎片，为提取过程腾出空间
         torch.cuda.empty_cache() 
         self.model.eval()
+        
         # 获取所有LoRA模块名称
         lora_module_names = self.model.vision_model.get_module_names()
         logging.info(f"Found {len(lora_module_names)} LoRA modules")
         
-        # 注册hooks
+        # 注册hooks并初始化累加器
         hooks = {}
         feature_extractors = {}
+        running_xtx = {} # 用于存储各层 X^T * X 的累加和
         
         for name in lora_module_names:
-                    module = self.model.vision_model.lora_modules[name]
-                    extractor = FeatureExtractorHook()
-                    # [修改点: 删掉了 .linear] 直接在 LoRA 模块上注册钩子，
-                    # 这样可以兼容 SGPBaseDoRA 等不同的底层实现
-                    hook = module.register_forward_hook(extractor)
-                    hooks[name] = hook
-                    feature_extractors[name] = extractor
+            module = self.model.vision_model.lora_modules[name]
+            extractor = FeatureExtractorHook()
+            # [修改点: 删掉了 .linear] 直接在 LoRA 模块上注册钩子，兼容 SGPBaseDoRA
+            hook = module.register_forward_hook(extractor)
+            hooks[name] = hook
+            feature_extractors[name] = extractor
+            running_xtx[name] = None 
+
+        total_observations = 0
         
-        # 前向传播收集特征
-        total_samples = 0
-        for images, _ in tqdm(data_loader, desc="Collecting features"):
+        # [修改点] 遍历数据，边提取边累加，计算完立即释放特征，防止堆积
+        for images, _ in tqdm(data_loader, desc="Collecting features", leave=False):
             images = images.to(self.device)
-            _ = self.encode_image(images)  # 触发hooks
-            total_samples += images.size(0)
+            _ = self.encode_image(images)  # 触发 hooks 抓取特征
+            
+            for name in lora_module_names:
+                # 获取当前 Batch 的特征 [Batch, Seq, Dim]
+                batch_feats = feature_extractors[name].get_features()
+                
+                if batch_feats is not None:
+                    # [修改点] 强制转为 float32 避开溢出，并处理 Transformer 3D 输入
+                    batch_feats = batch_feats.to(torch.float32)
+                    if batch_feats.dim() == 3:
+                        batch_feats = batch_feats.reshape(-1, batch_feats.shape[-1])
+                    
+                    # 在内存中计算当前 Batch 的矩阵平方和 (X^T * X)
+                    xtx_batch = batch_feats.t() @ batch_feats
+                    
+                    if running_xtx[name] is None:
+                        running_xtx[name] = xtx_batch
+                    else:
+                        running_xtx[name] += xtx_batch
+                    
+                    # [关键步骤] 立即清空当前 Hook 里的特征列表，释放 RAM 空间
+                    feature_extractors[name].clear()
+            
+            # 更新总观测样本数（Token总数）
+            if batch_feats is not None:
+                total_observations += batch_feats.shape[0]
         
-        # 计算协方差``
+        # 计算最终协方差并应用平滑
         covariances = {}
         for name in lora_module_names:
-            features = feature_extractors[name].get_features()  
-            if features is not None:
-                # [修改] 强制转为 float32 避开 float16 的溢出风险
-                features = features.to(torch.float32)
+            if running_xtx[name] is not None:
+                # [修改点] 使用总观测数进行归一化
+                cov = running_xtx[name] / total_observations
                 
-                if features.dim() == 3:
-                    features = features.reshape(-1, features.shape[-1])
-                
-                num_observations = features.shape[0]
-                
-                # [修改 ] 在 float32 下计算矩阵乘法，并进行归一化
-                cov = (features.t() @ features) / num_observations
-                
-                # [修改 ] 数值平滑：微量抖动防止奇异矩阵，并确保完全对称
-                # 加上一个极小的 epsilon 保证 eigh 计算的稳定性
+                # [修改点] 数值平滑：微量抖动防止奇异矩阵，并确保完全对称
                 eps = 1e-6
-                cov = (cov + cov.t()) / 2.0  # 确保绝对对称
+                cov = (cov + cov.t()) / 2.0  
                 cov = cov + torch.eye(cov.shape[0], device=cov.device) * eps
                 
-                # 检查是否存在非法数值
+                # 检查非法数值
                 if torch.isnan(cov).any() or torch.isinf(cov).any():
-                    logging.warning(f"Layer {name} contains NaN or Inf in covariance. Cleaning...")
+                    logging.warning(f"Layer {name} contains NaN or Inf. Cleaning...")
                     cov = torch.nan_to_num(cov, nan=0.0, posinf=1.0, neginf=-1.0)
 
                 covariances[name] = cov.to('cpu') 
             
+            # 清理钩子
             hooks[name].remove()
         
-        logging.info(f"✓ Extracted covariances for {len(covariances)} layers")
+        logging.info(f"✓ Extracted incremental covariances for {len(covariances)} layers")
         return covariances
     
     def update_covariance_history(self, new_covariances: Dict[str, torch.Tensor]):
@@ -175,8 +196,7 @@ class LoRANSPTrainer:
                 self.covariance_history[layer_name] = merged_cov
                 updated_layers.append(layer_name)
             else:
-                # 第一层，直接保存（或可以选择不处理，根据用户要求）
-                # 用户说"第一个不处理"，我理解为用户会在外部处理，这里仍然保存
+                # 第一层，直接保存
                 self.covariance_history[layer_name] = new_cov
                 new_layers.append(layer_name)
         
@@ -187,6 +207,9 @@ class LoRANSPTrainer:
         logging.info("=== Updating Projection Matrices ===")
         self.model.vision_model.update_projection_matrices(self.covariance_history)
         logging.info("✓ Projection matrices updated")
+        
+        # [修改点] 更新完投影后清理缓存
+        torch.cuda.empty_cache()
     
     def finalize_task_for_incremental(self) -> None:
         """
@@ -206,7 +229,7 @@ class LoRANSPTrainer:
             lora_modules = self.model.vision_model.lora_modules
             
             for name, module in lora_modules.items():
-                # [修改点] 根据你刚才报错提供的列表，正确的函数名是 merge_lora_weights
+                # [修改点] 正确的函数名是 merge_lora_weights
                 if hasattr(module, 'merge_lora_weights'):
                     module.merge_lora_weights()
                 elif hasattr(module, 'merge_and_reinit'):
@@ -272,7 +295,7 @@ class LoRANSPTrainer:
             preds = logits.argmax(dim=-1)
             train_acc = (preds == labels).float().mean().item() * 100
             
-            # [修改点: 初始化记录用的蒸馏损失，防止 reference_loader 为空时报错]
+            # [修改点: 初始化记录用的蒸馏损失]
             l_fd_val, l_cd_val = 0.0, 0.0
             
             # 蒸馏损失
@@ -314,7 +337,7 @@ class LoRANSPTrainer:
                 'Acc': f"{train_acc:.1f}%"
             })
             
-            #[修改点: 每 50 步或训练结束时，使用 logging 保存一次正式的文本日志]
+            #[修改点: 每 50 步或训练结束时，使用 logging 保存文本日志]
             if (i + 1) % 50 == 0 or (i + 1) == self.args.iterations:
                 logging.info(f"Iter[{i+1:03d}/{self.args.iterations}] | "
                              f"Loss: {loss.item():.4f} | CE: {ce_loss.item():.4f} | "
@@ -355,7 +378,7 @@ class LoRANSPTrainer:
             'covariance_history': self.covariance_history,
             'cov_momentum': self.cov_momentum,
             'class_names': class_names,
-            'stats_dict': stats_dict,  # 可选：保存类别统计分布
+            'stats_dict': stats_dict,  
             'args': vars(self.args),
         }
         torch.save(checkpoint, path)
