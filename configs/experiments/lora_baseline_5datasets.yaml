@@ -1,0 +1,57 @@
+# LoRA基线：5个数据集（无NSP、无蒸馏）
+# 用于对比实验
+
+experiment:
+  name: "lora_baseline_5datasets"
+  description: "LoRA baseline (without NSP and distillation) on 5 ID datasets"
+  tags: ["lora", "baseline", "joint", "5datasets", "main_experiment"]
+
+# 数据集
+data:
+  id_datasets: ["caltech101", "flowers", "oxford_pets", "stanford_cars", "food101"]
+  ood_datasets: ["dtd", "eurosat", "mnist", "sun397"]
+
+# 训练配置：标准LoRA
+training:
+  iterations: 800
+  lr: 1e-4
+  weight_decay: 3e-5
+  
+  lora:
+    rank: 4
+    type: "lora"  # 标准LoRA，无NSP
+    
+  distillation:
+    enabled: false  # 无蒸馏
+
+# 分类器和检测器使用相同配置（公平对比）
+classifier:
+  type: "lr_rgda"
+  rank: 32
+  reg_alpha1: 0.6
+  reg_alpha2: 2.0
+  reg_alpha3: 0.5
+
+ensemble:
+  enabled: true
+  alpha: 0.8
+  temperature: 1.0
+
+ood_detector:
+  type: "lr_rgda"
+  rank: 32
+  reg_alpha1: 0.6
+  reg_alpha2: 2.0
+  reg_alpha3: 0.5
+  threshold: 0.9930
+  auto_threshold: true
+  target_tpr: 0.95
+
+evaluation:
+  metrics: ["accuracy", "auroc", "fpr_at_95_tpr", "detection_error"]
+  eval_ood_detection: true
+  eval_ensemble: true
+
+output:
+  save_model: true
+  save_stats: true

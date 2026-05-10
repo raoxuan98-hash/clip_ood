@@ -1,0 +1,120 @@
+# 基础默认配置
+# 所有实验都会继承此配置
+
+# 实验元信息
+experiment:
+  name: "default_experiment"
+  description: "Default experiment configuration"
+  author: ""
+  tags: []
+  
+# 路径配置
+paths:
+  data_root: "/home/raoxuan/projects/data/X-TAIL/"
+  output_dir: "./outputs"
+  checkpoint_dir: "./checkpoints"
+  cache_dir: "./cache"
+  
+# 数据集配置
+data:
+  num_shots: 16
+  batch_size: 32
+  max_test_samples: 1000
+  image_size: 224
+  
+# 随机种子
+seed: 42
+
+# 设备
+device: "cuda"  # cuda或cpu
+
+# 训练配置（LoRA-NSP）
+training:
+  enabled: true
+  iterations: 800
+  lr: 1e-4
+  weight_decay: 3e-5
+  
+  # LoRA参数
+  lora:
+    rank: 4
+    type: "lora_nsp"  # lora_sgp或lora_nsp
+    nsp_eps: 0.05
+    nsp_weight: 0.02
+    
+  # 协方差历史参数
+  cov_momentum: 0.9
+  
+  # 蒸馏参数
+  distillation:
+    enabled: true
+    reference_dataset: "flickr8k"
+    fd_weight: 1.0  # 特征蒸馏权重
+    cd_weight: 1.0  # 跨模态蒸馏权重
+
+# 分类器配置 (alpha1/alpha2优化: 保守设置)
+classifier:
+  type: "lr_rgda"  # lda, lr_rgda, qda
+  rank: 32  # 低秩分解秩
+  reg_alpha1: 0.6   # 协方差正则化系数
+  reg_alpha2: 2.0   # 低秩分解正则化系数 (保守设置，平衡性能与鲁棒性)
+  reg_alpha3: 0.5   # 混合正则化系数
+
+# 集成分类器配置 (基于平衡样本 OOD:ID = 2:1 优化)
+ensemble:
+  enabled: true
+  alpha: 0.8  # 最佳LR-RGDA贡献系数 (Temperature=1.0)
+  temperature: 1.0  # 标准softmax温度
+
+# OOD检测器配置 (alpha1/alpha2优化: 保守设置)
+ood_detector:
+  enabled: true
+  type: "lr_rgda"  # mahalanobis, lda, lr_rgda, qda (默认使用LR-RGDA)
+  
+  # LR-RGDA特定参数 (alpha1=0.6, alpha2=2.0, alpha3=0.5)
+  rank: 32
+  reg_alpha1: 0.6   # 协方差正则化系数
+  reg_alpha2: 2.0   # 低秩分解正则化系数 (保守设置，平衡性能与鲁棒性)
+  reg_alpha3: 0.5   # 混合正则化系数
+  
+  # Mahalanobis特定参数
+  mahalanobis_alpha: 0.2
+  
+  # 阈值设置 (基于保守参数)
+  threshold: 0.9930  # 对应alpha1=0.6, alpha2=2.0, alpha3=0.5
+  auto_threshold: true  # 自动基于TPR确定阈值
+  target_tpr: 0.95
+
+# 自适应路由配置
+adaptive_router:
+  enabled: true
+  
+# 超参数优化配置
+optimization:
+  enabled: false
+  
+  # OOD检测器优化
+  ood_detector:
+    enabled: false
+    alpha_range: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    metric: "fpr_at_target_tpr"
+  
+  # 集成分类器优化
+  ensemble:
+    enabled: false
+    temperature_range: [0.5, 1.0, 2.0, 5.0, 10.0]
+    alpha_values: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    match_metric: "max_prob_mse"
+    alpha_metric: "id_accuracy"
+
+# 评估配置
+evaluation:
+  metrics: ["accuracy", "auroc", "fpr_at_95_tpr"]
+  save_predictions: false
+  visualize: true
+
+# 日志配置
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_to_file: true
+  tensorboard: false

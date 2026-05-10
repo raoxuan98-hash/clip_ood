@@ -1,0 +1,78 @@
+# Baseline 4: LoRA-NSP-Full (Our Method)
+# 完整方案：LoRA-NSP 微调 + OOD 动态路由 + LR-RGDA 分类器
+
+experiment:
+  name: "incremental_b4_lora_nsp_full"
+  description: "Baseline 4: LoRA-NSP with OOD Routing and LR-RGDA (Full Method)"
+  tags: ["incremental", "lora_nsp", "routing", "lr_rgda", "full_method", "b4"]
+
+mode: "incremental"
+
+data:
+  task_sequence:
+    - ["aircraft"]
+    - ["caltech101"]
+    - ["dtd"]
+    - ["eurosat"]
+    - ["flowers"]
+    - ["food101"]
+    - ["mnist"]
+    - ["oxford_pets"]
+    - ["stanford_cars"]
+    - ["sun397"]
+  
+  all_datasets: ["aircraft", "caltech101", "dtd", "eurosat", "flowers", "food101", "mnist", "oxford_pets", "stanford_cars", "sun397"]
+
+# 训练配置：LoRA-NSP
+training:
+  enabled: true
+  iterations: 800
+  lr: 1e-4
+  weight_decay: 3e-5
+  
+  lora:
+    rank: 4
+    type: "lora_nsp"
+    nsp_eps: 0.05
+    nsp_weight: 0.02
+  
+  distillation:
+    enabled: true
+    fd_weight: 1.0
+    cd_weight: 1.0
+  
+  cov_momentum: 0.9
+
+# 分类器：LR-RGDA
+classifier:
+  type: "lr_rgda"
+  rank: 32
+  reg_alpha1: 0.6
+  reg_alpha2: 2.0
+  reg_alpha3: 0.5
+
+ensemble:
+  enabled: true
+  alpha: 0.8
+  temperature: 1.0
+
+ood_detector:
+  enabled: true
+  type: "lr_rgda"
+  rank: 32
+  reg_alpha1: 0.6
+  reg_alpha2: 2.0
+  reg_alpha3: 0.5
+  threshold: 0.9930
+  auto_threshold: true
+  target_tpr: 0.95
+
+evaluation:
+  eval_after_each_task: true
+  eval_all_tasks: true
+  metrics: ["accuracy", "auroc", "fpr_at_95_tpr"]
+
+output:
+  save_model: true
+  save_stats: true
+  save_covariance_history: true

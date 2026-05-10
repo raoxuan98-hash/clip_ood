@@ -1,0 +1,40 @@
+# 增量学习：3个任务
+# 继承自: base/default.yaml
+
+experiment:
+  name: "incremental_3tasks"
+  description: "Incremental learning on 3 tasks with LoRA-NSP"
+  tags: ["incremental", "lora_nsp", "3tasks"]
+
+# 增量学习模式
+mode: "incremental"  # joint或incremental
+
+data:
+  # 增量学习序列
+  task_sequence:
+    - ["caltech101"]
+    - ["flowers"]
+    - ["oxford_pets"]
+  
+  # 所有数据集（用于ID/OOD评估）
+  all_datasets: ["caltech101", "flowers", "oxford_pets", "stanford_cars", "food101"]
+
+# 训练配置
+training:
+  iterations: 800
+  
+  lora:
+    rank: 4
+    type: "lora_nsp"
+  
+  # 协方差历史
+  cov_momentum: 0.9
+
+# 每个任务后评估
+evaluation:
+  eval_after_each_task: true
+  eval_all_tasks: true  # 在所有已学任务上评估
+
+output:
+  save_covariance_history: true
+  save_forgetting_curve: true

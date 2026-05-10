@@ -1,0 +1,49 @@
+# 集成分类器超参数优化
+# 继承自: base/default.yaml
+
+experiment:
+  name: "optimize_ensemble"
+  description: "Optimize ensemble classifier hyperparameters"
+  tags: ["optimization", "ensemble"]
+
+mode: "optimization"
+
+data:
+  id_datasets: ["caltech101", "flowers"]
+  ood_datasets: ["dtd", "eurosat"]
+
+# 跳过训练，只优化
+training:
+  enabled: false
+
+# 启用优化
+optimization:
+  enabled: true
+  
+  ensemble:
+    enabled: true
+    
+    # 更精细的搜索范围
+    temperature_range:
+      type: "range"  # discrete或range
+      start: 0.5
+      end: 10.0
+      step: 0.5
+    
+    alpha_values:
+      type: "range"
+      start: 0.0
+      end: 1.0
+      step: 0.05
+    
+    match_metric: "max_prob_mse"
+    alpha_metric: "id_accuracy"
+
+# 特征缓存
+feature_cache:
+  enabled: true
+  reuse: true
+
+output:
+  save_optimization_plot: true
+  save_best_config: true

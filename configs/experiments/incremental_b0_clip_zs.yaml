@@ -1,0 +1,53 @@
+# Baseline 0: Pre-trained CLIP + Zero-shot
+# 增量评估模式，但不进行训练
+
+experiment:
+  name: "incremental_b0_clip_zs"
+  description: "Baseline 0: Pre-trained CLIP with Zero-shot classifier (Incremental Evaluation)"
+  tags: ["incremental", "zeroshot", "baseline", "b0"]
+
+mode: "incremental"
+
+data:
+  task_sequence:
+    - ["aircraft"]
+    - ["caltech101"]
+    - ["dtd"]
+    - ["eurosat"]
+    - ["flowers"]
+    - ["food101"]
+    - ["mnist"]
+    - ["oxford_pets"]
+    - ["stanford_cars"]
+    - ["sun397"]
+  
+  all_datasets: ["aircraft", "caltech101", "dtd", "eurosat", "flowers", "food101", "mnist", "oxford_pets", "stanford_cars", "sun397"]
+
+# 训练配置：禁用训练
+training:
+  enabled: false
+  iterations: 0
+  lr: 0.0
+  
+  lora:
+    rank: 4
+    type: "none"
+
+# 分类器：纯零样本
+classifier:
+  type: "zeroshot"
+
+ensemble:
+  enabled: false
+
+ood_detector:
+  enabled: false
+
+evaluation:
+  eval_after_each_task: true
+  eval_all_tasks: true
+  metrics: ["accuracy"]
+
+output:
+  save_model: false
+  save_stats: false

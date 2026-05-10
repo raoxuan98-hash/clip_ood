@@ -1,0 +1,63 @@
+# Baseline 3: LoRA-NSP + Zero-shot Classifier
+# LoRA-NSP 微调，推理使用零样本分类器 (无动态路由和 LR-RGDA)
+
+experiment:
+  name: "incremental_b3_lora_nsp_zs"
+  description: "Baseline 3: LoRA-NSP with Zero-shot classifier"
+  tags: ["incremental", "lora_nsp", "zeroshot", "baseline", "b3"]
+
+mode: "incremental"
+
+data:
+  task_sequence:
+    - ["aircraft"]
+    - ["caltech101"]
+    - ["dtd"]
+    - ["eurosat"]
+    - ["flowers"]
+    - ["food101"]
+    - ["mnist"]
+    - ["oxford_pets"]
+    - ["stanford_cars"]
+    - ["sun397"]
+  
+  all_datasets: ["aircraft", "caltech101", "dtd", "eurosat", "flowers", "food101", "mnist", "oxford_pets", "stanford_cars", "sun397"]
+
+# 训练配置：LoRA-NSP (有 NSP 投影更新)
+training:
+  enabled: true
+  iterations: 800
+  lr: 1e-4
+  weight_decay: 3e-5
+  
+  lora:
+    rank: 4
+    type: "lora_nsp"
+    nsp_eps: 0.05
+    nsp_weight: 0.02
+  
+  distillation:
+    enabled: true
+    fd_weight: 1.0
+    cd_weight: 1.0
+  
+  cov_momentum: 0.9
+
+# 分类器：纯零样本
+classifier:
+  type: "zeroshot"
+
+ensemble:
+  enabled: false
+
+ood_detector:
+  enabled: false
+
+evaluation:
+  eval_after_each_task: true
+  eval_all_tasks: true
+  metrics: ["accuracy", "forgetting"]
+
+output:
+  save_model: true
+  save_stats: false

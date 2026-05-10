@@ -1,0 +1,64 @@
+# Baseline 2: LoRA + Zero-shot Classifier
+# 标准 LoRA 微调，不使用 NSP 投影约束，推理使用零样本分类器
+
+experiment:
+  name: "incremental_b2_lora_zs"
+  description: "Baseline 2: Vision Encoder LoRA with Zero-shot classifier"
+  tags: ["incremental", "lora", "zeroshot", "baseline", "b2"]
+
+mode: "incremental"
+
+data:
+  task_sequence:
+    - ["aircraft"]
+    - ["caltech101"]
+    - ["dtd"]
+    - ["eurosat"]
+    - ["flowers"]
+    - ["food101"]
+    - ["mnist"]
+    - ["oxford_pets"]
+    - ["stanford_cars"]
+    - ["sun397"]
+  
+  all_datasets: ["aircraft", "caltech101", "dtd", "eurosat", "flowers", "food101", "mnist", "oxford_pets", "stanford_cars", "sun397"]
+
+# 训练配置：标准 LoRA (nsp_weight=0, nsp_eps=0)
+training:
+  enabled: true
+  iterations: 800
+  lr: 1e-4
+  weight_decay: 3e-5
+  
+  lora:
+    rank: 4
+    type: "lora_sgp"
+    use_soft_projection: false
+    nsp_eps: 0.0
+    nsp_weight: 0.0
+  
+  distillation:
+    enabled: true
+    fd_weight: 1.0
+    cd_weight: 1.0
+  
+  cov_momentum: 1.0  # 不更新协方差，保持单位矩阵
+
+# 分类器：纯零样本
+classifier:
+  type: "zeroshot"
+
+ensemble:
+  enabled: false
+
+ood_detector:
+  enabled: false
+
+evaluation:
+  eval_after_each_task: true
+  eval_all_tasks: true
+  metrics: ["accuracy", "forgetting"]
+
+output:
+  save_model: true
+  save_stats: false

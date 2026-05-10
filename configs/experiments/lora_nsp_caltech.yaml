@@ -1,0 +1,32 @@
+# LoRA-NSP在Caltech101上的实验
+# 继承自: base/default.yaml
+
+experiment:
+  name: "lora_nsp_caltech"
+  description: "LoRA-NSP finetuning on Caltech101"
+  tags: ["lora_nsp", "caltech101", "single_task"]
+
+# 数据集
+data:
+  id_datasets: ["caltech101"]
+  ood_datasets: ["dtd", "eurosat"]
+
+# 训练配置
+training:
+  iterations: 1000
+  lr: 1e-4
+  
+  lora:
+    rank: 4
+    type: "lora_nsp"
+    
+  distillation:
+    enabled: true
+    fd_weight: 1.0
+
+# 使用默认分类器和检测器配置
+# 无需覆盖
+
+output:
+  save_model: true
+  save_stats: true

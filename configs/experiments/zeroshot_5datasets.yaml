@@ -1,0 +1,52 @@
+# Zero-shot CLIP基线：5个数据集
+# 无训练，仅评估预训练CLIP
+
+experiment:
+  name: "zeroshot_5datasets"
+  description: "Zero-shot CLIP on 5 ID datasets (no training)"
+  tags: ["zeroshot", "baseline", "5datasets", "main_experiment"]
+
+# 数据集
+data:
+  id_datasets: ["caltech101", "flowers", "oxford_pets", "stanford_cars", "food101"]
+  ood_datasets: ["dtd", "eurosat", "mnist", "sun397"]
+
+# 训练配置：无训练
+training:
+  enabled: false  # 跳过训练
+
+# 使用预训练CLIP
+model:
+  type: "pretrained"
+  train_mode: "frozen"
+
+# 分类器和检测器
+classifier:
+  type: "lr_rgda"
+  rank: 32
+  reg_alpha1: 0.6
+  reg_alpha2: 2.0
+  reg_alpha3: 0.5
+
+ensemble:
+  enabled: true
+  alpha: 0.8
+  temperature: 1.0
+
+ood_detector:
+  type: "lr_rgda"
+  rank: 32
+  reg_alpha1: 0.6
+  reg_alpha2: 2.0
+  reg_alpha3: 0.5
+  threshold: 0.9930
+  auto_threshold: true
+  target_tpr: 0.95
+
+evaluation:
+  metrics: ["accuracy", "auroc", "fpr_at_95_tpr"]
+  eval_ood_detection: true
+  eval_ensemble: true
+
+output:
+  save_stats: true
